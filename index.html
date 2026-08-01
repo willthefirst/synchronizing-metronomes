@@ -1708,10 +1708,10 @@ class KuramotoDemo extends DemoShell {
 {
   const d = new Demo('demo-hero',
     { n: 5, M: 0.6 },
-    { w: 860, h: 500, forces: true, readout: true, speed: 8, autoplay: true,
+    { w: 860, h: 500, forces: true, readout: true, speed: 2, autoplay: true,
       label: 'Five metronomes on a rolling board, gradually synchronizing' });
   addButton(d, 'Restart with random phases', () => d.randomize());
-  speedSlider(d, { min: 1, max: 64, initial: 8 });
+  speedSlider(d, { min: 1, max: 64, initial: 2 });
 }
 
 // Single metronome on a fixed base, tempo slider
@@ -1762,7 +1762,7 @@ class KuramotoDemo extends DemoShell {
 // A pendulum on a board shaken by hand at its own tempo
 {
   const d = new DrivenDemo('demo-nudge',
-    { w: 680, h: 430, graph: true, readout: true, speed: 4,
+    { w: 680, h: 430, graph: true, readout: true, speed: 2,
       label: 'A metronome on a board shaken in a steady rhythm, drifting into step with the shake' });
   d.graphTicks = [['−1', 0], ['0', 0.5], ['+1', 1]];
   d.graphCaption = span => `beats ahead (+) or behind (−) of the shake, over ${formatTime(span)}`;
@@ -1774,17 +1774,17 @@ class KuramotoDemo extends DemoShell {
     fmt: v => (v / 20).toFixed(1) + ' cm',
     oninput: v => { d.Ad = v / 2000; },
   });
-  speedSlider(d, { min: 1, max: 32, initial: 4 });
+  speedSlider(d, { min: 1, max: 32, initial: 2 });
 }
 
 // Two metronomes, phase inset
 {
   const d = new Demo('demo-two',
     { n: 2, M: 0.6 },
-    { w: 720, h: 460, forces: true, phaseInset: true, readout: true, speed: 4,
+    { w: 720, h: 460, forces: true, phaseInset: true, readout: true, speed: 2,
       label: 'Two metronomes on a rolling board, drifting into synchrony' });
   addButton(d, 'Randomize phases', () => d.randomize());
-  speedSlider(d, { min: 1, max: 64, initial: 4 });
+  speedSlider(d, { min: 1, max: 64, initial: 2 });
   baseWeightSlider(d, 30);
 }
 
@@ -1882,10 +1882,10 @@ class KuramotoDemo extends DemoShell {
 {
   const d = new Demo('demo-order',
     { n: 4, M: 0.75 },
-    { w: 860, h: 480, forces: true, graph: true, readout: true, speed: 8,
+    { w: 860, h: 480, forces: true, graph: true, readout: true, speed: 2,
       label: 'Four metronomes with a live graph of the order parameter r' });
   addButton(d, 'Randomize phases', () => d.randomize());
-  speedSlider(d, { min: 1, max: 64, initial: 8 });
+  speedSlider(d, { min: 1, max: 64, initial: 2 });
   baseWeightSlider(d, 35);
 }
 
@@ -1893,10 +1893,10 @@ class KuramotoDemo extends DemoShell {
 {
   const d = new Demo('demo-halftime',
     { n: 3, M: 0.6, mult: [1, 0.5, 1] },
-    { w: 860, h: 480, forces: true, graph: true, readout: true, speed: 8,
+    { w: 860, h: 480, forces: true, graph: true, readout: true, speed: 2,
       label: 'Three metronomes, the middle one at half tempo' });
   addButton(d, 'Randomize phases', () => d.randomize());
-  speedSlider(d, { min: 1, max: 64, initial: 8 });
+  speedSlider(d, { min: 1, max: 64, initial: 2 });
   multiplierChips(d);
 }
 
@@ -1904,7 +1904,7 @@ class KuramotoDemo extends DemoShell {
 {
   const d = new Demo('demo-playground',
     { n: 3, M: 0.75 },
-    { w: 880, h: 500, forces: true, phaseInset: true, graph: true, readout: true, speed: 3,
+    { w: 880, h: 500, forces: true, phaseInset: true, graph: true, readout: true, speed: 2,
       label: 'Playground: up to seven metronomes with adjustable tempos, base weight and friction' });
 
   let rebuildChips;
@@ -1932,7 +1932,7 @@ class KuramotoDemo extends DemoShell {
     fmt: v => v.toFixed(0) + ' BPM',
     oninput: v => { d.sim.bpm = v; d.sim.updateFrequencies(); },
   });
-  speedSlider(d, { min: 0.1, max: 100, initial: 3 });
+  speedSlider(d, { min: 0.1, max: 100, initial: 2 });
   baseWeightSlider(d, 35);
   addSlider(d, {
     label: 'roller friction', value: 20,
@@ -1945,7 +1945,7 @@ class KuramotoDemo extends DemoShell {
 // Millennium Bridge
 {
   const d = new BridgeDemo('demo-bridge',
-    { w: 860, h: 360, graph: true, readout: true, speed: 8,
+    { w: 860, h: 360, graph: true, readout: true, speed: 3,
       label: 'The Millennium Bridge: walkers synchronizing with the deck sway past a crowd-size threshold' });
   d.graphTicks = [['0', 0], ['5', 0.5], ['10', 1]];
   d.graphCaption = span => `peak sway in centimeters, over ${formatTime(span)} of simulated time`;
@@ -1955,7 +1955,7 @@ class KuramotoDemo extends DemoShell {
     fmt: v => v.toFixed(0) + ' walkers',
     oninput: v => { d.N = v; d.restart(); },
   });
-  speedSlider(d, { min: 1, max: 32, initial: 8 });
+  speedSlider(d, { min: 1, max: 32, initial: 3 });
 }
 
 // Fireflies
