@@ -1,0 +1,2033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synchronizing Metronomes</title>
+<style>
+  :root {
+    --text: #333;
+    --dim: #888;
+    --faint: #aaa;
+    --accent: #0a84ff;
+    --demo-bg: #f3f4f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #fff;
+    color: var(--text);
+    font-family: -apple-system, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 17.5px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  article {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 56px 20px 120px;
+  }
+  h1 {
+    font-size: 34px;
+    line-height: 1.2;
+    font-weight: 700;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  .byline { color: var(--dim); font-size: 15px; margin-bottom: 36px; }
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 56px 0 12px;
+    letter-spacing: -0.01em;
+  }
+  p { margin: 0 0 18px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  em { font-style: italic; }
+  .demo {
+    background: var(--demo-bg);
+    border-radius: 10px;
+    width: min(880px, calc(100vw - 24px));
+    margin: 30px calc((680px - min(880px, 100vw - 24px)) / 2 - 20px + 20px);
+    margin-left: 50%;
+    transform: translateX(-50%);
+    position: relative;
+    left: 0;
+    padding: 18px 10px 14px;
+    margin-top: 30px;
+    margin-bottom: 34px;
+  }
+  .demo canvas { display: block; margin: 0 auto; max-width: 100%; }
+  .demo .graphwrap { margin: 10px auto 0; width: fit-content; max-width: 100%; }
+  .demo .graphwrap canvas { background: #fff; border: 1px solid #e2e4e9; border-radius: 8px; }
+  .readout {
+    text-align: center; color: var(--dim); font-size: 13px;
+    font-variant-numeric: tabular-nums; margin-top: 10px; min-height: 20px;
+  }
+  .readout .chip {
+    background: #dff5e5; color: #1d7a3a; border-radius: 999px;
+    padding: 1px 10px; font-weight: 600; font-size: 12px; margin-left: 8px;
+    opacity: 0; transition: opacity .3s;
+  }
+  .readout .chip.on { opacity: 1; }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 10px 26px;
+    justify-content: center; align-items: flex-end;
+    margin-top: 14px; padding: 0 10px;
+  }
+  .ctl { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .ctl label {
+    font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em;
+  }
+  .ctl .val { font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 140px; accent-color: var(--accent); }
+  button {
+    background: #fff; color: var(--text);
+    border: 1px solid #d5d8de; border-radius: 8px;
+    padding: 6px 14px; font-size: 13.5px; cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { background: #fafafa; border-color: #c0c4cc; }
+  button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  select {
+    background: #fff; color: var(--text);
+    border: 1px solid #d5d8de; border-radius: 6px;
+    padding: 3px 5px; font-size: 13px; font-family: inherit;
+  }
+  .chips { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .metchip { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--dim); }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .videowrap {
+    width: min(720px, calc(100vw - 24px));
+    margin: 30px auto 34px;
+    margin-left: 50%;
+    transform: translateX(-50%);
+  }
+  .videowrap iframe {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 0;
+    border-radius: 10px;
+    background: #000;
+  }
+  .vidcap { text-align: center; color: var(--dim); font-size: 13px; margin-top: 8px; }
+  .canvaswrap { position: relative; width: fit-content; max-width: 100%; margin: 0 auto; }
+  .overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(243,244,246,0.45);
+    cursor: pointer; border-radius: 8px;
+  }
+  .playbtn {
+    width: 66px; height: 66px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; padding-left: 6px;
+    box-shadow: 0 4px 18px rgba(10,132,255,0.35);
+    transition: transform .15s;
+  }
+  .overlay:hover .playbtn { transform: scale(1.08); }
+  .pausehint {
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(255,255,255,0.78); color: #666;
+    border-radius: 6px; padding: 3px 8px; font-size: 11px;
+    pointer-events: none; opacity: 0; transition: opacity .2s;
+  }
+  .canvaswrap:hover .pausehint.show { opacity: 1; }
+  .soundtoggle {
+    position: fixed; right: 18px; bottom: 18px; z-index: 10;
+    border-radius: 999px; padding: 9px 13px; font-size: 17px;
+    background: #fff; border: 1px solid #d5d8de;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  }
+  .smallprint {
+    font-size: 14px; color: var(--dim); line-height: 1.55;
+    border-top: 1px solid #eee; margin-top: 56px; padding-top: 20px;
+  }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  .pulltable {
+    width: min(820px, calc(100vw - 24px));
+    margin: 26px auto 30px;
+    margin-left: 50%;
+    transform: translateX(-50%);
+    border-collapse: collapse;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .pulltable th, .pulltable td {
+    text-align: left;
+    vertical-align: top;
+    padding: 11px 16px;
+    border-bottom: 1px solid #e7e9ee;
+  }
+  .pulltable thead th {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); font-weight: 600; border-bottom: 1px solid #d5d8de;
+  }
+  .pulltable td:first-child { font-weight: 600; white-space: nowrap; }
+  .pulltable td .carrier { color: var(--accent); font-weight: 600; }
+  .pulltable tbody tr:last-child td { border-bottom: none; }
+  @media (max-width: 600px) {
+    .pulltable, .pulltable thead, .pulltable tbody, .pulltable tr, .pulltable th, .pulltable td { display: block; }
+    .pulltable thead { display: none; }
+    .pulltable tr { border-bottom: 1px solid #d5d8de; padding: 8px 0; }
+    .pulltable td { border: none; padding: 3px 6px; }
+    .pulltable td:first-child { font-size: 16px; padding-top: 8px; }
+  }
+</style>
+</head>
+<body>
+<article>
+
+<h1>Synchronizing Metronomes</h1>
+<div class="byline">An interactive explanation</div>
+
+<p>In February 1665, Christiaan Huygens — inventor of the pendulum clock — lay sick in bed and noticed something odd about two of his clocks hanging from the same wooden beam. No matter how they started, within half an hour their pendulums were swinging in perfect opposition — each swinging left just as the other swung right, the ticks interleaved. He wrote to his father about an <em>"odd kind of sympathy"</em> between the clocks.</p>
+
+<p>You can recreate his discovery with a few metronomes and a board resting on two cans. Wind them up, start them out of step, and set them on the board. Here is the real thing, filmed by the UCLA physics department:</p>
+
+<div class="videowrap">
+  <iframe src="https://www.youtube-nocookie.com/embed/T58lGKREubo" title="spontaneous synchronization — uclaphysicsvideo" loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+  <div class="vidcap">“Spontaneous synchronization” — UCLA Physics</div>
+</div>
+
+<p>The same experiment is easy to simulate, and a simulation lets us slow the process down, speed it up, and take it apart. Below, five simulated metronomes start at random points in their swing. Press play and watch what they do:</p>
+
+<div class="demo" id="demo-hero"></div>
+
+<p>They always end up ticking together, although nothing connects them but the board they stand on. Curiously, they agree <em>in step</em>, where Huygens's clocks agreed in opposition — we'll come back to that. In the rest of this article we'll build the experiment up from its parts and see how it happens. One suggestion before we start: the speaker button in the corner of the page adds ticking sounds to every demo, and with it on you can <em>hear</em> the moment agreement arrives.</p>
+
+<h2>A metronome</h2>
+
+<p>At its heart a metronome is a pendulum: a rod swinging on a pivot, with a small weight that slides along the rod to set the tempo. Moving the weight away from the pivot makes the swing slower, and moving it closer makes it faster. Each tick — each <em>beat</em> — is one half of a full swing.</p>
+
+<div class="demo" id="demo-single"></div>
+
+<p>The dial on a real metronome runs from about 40 beats per minute to 208. Everything in this article works the same way at any tempo, so we'll mostly leave it near 144.</p>
+
+<h2>Keeping time</h2>
+
+<p>A pendulum on its own winds down. Friction at the pivot and air resistance take a little energy from every swing, and after ten or twenty seconds it hangs still. You can see this happen by switching the escapement off:</p>
+
+<div class="demo" id="demo-escapement"></div>
+
+<p>The <em>escapement</em> is the mechanism that keeps this from happening. A wound spring stores energy, and a toothed wheel passes a small push to the pendulum at the same point in every swing — the tick you hear is that hand-off. The push replaces what friction took, so the pendulum settles into a steady swing of fixed width, marked above by the dashed lines.</p>
+
+<p>One property of this arrangement matters more than any other for what follows. Press the nudge button above and watch what recovers. The shove throws the swing off its usual width, and within a couple of beats the escapement has trimmed it back — that is the escapement doing its job. But the faint gray pendulum behind the colored one keeps the timing the swing <em>would</em> have kept, and the nudged pendulum never drifts back to it. The escapement polices how wide the swing is; nothing polices when it happens. After a disturbance the metronome swings exactly as before, permanently a little earlier or later than it would have been. That freedom in timing is what the rest of the story turns on.</p>
+
+<h2>Throwing its weight around</h2>
+
+<p>Now place the metronome on a board, and rest the board on two cans so that it can roll. The pendulum's weight accelerates left and right on every swing, and by Newton's third law the case — and the board beneath it — is pushed the opposite way. The arrow below the ground line shows the sideways force the metronome exerts on the board at each instant; the pale band behind it shows how large that force has recently been.</p>
+
+<div class="demo" id="demo-board"></div>
+
+<p>Try making the base heavier with the slider: the recoil shrinks, because the same force now has more mass to move. The board's motion is drawn at twice its true size here and throughout — in reality the sway is a centimeter or two at most.</p>
+
+<h2>The board pushes back</h2>
+
+<p>So each metronome shakes the board. The influence also runs the other way: a pendulum whose pivot accelerates feels an extra push, the same push you feel standing in a bus as it brakes. Through the board, every metronome is gently pushing on every other.</p>
+
+<p>What can that push actually change? Not the width of the swing — the escapement defends that. What nothing defends is timing. To see the effect in isolation, let's take the other metronomes away and shake the board ourselves, in a steady rhythm at the metronome's own tempo. On the circle at the top right, the gray dot keeps the rhythm of the shake and the colored dot follows the pendulum:</p>
+
+<div class="demo" id="demo-nudge"></div>
+
+<p>Start the pendulum behind the shake and it is hurried along until it catches up; start it ahead and it is held back until the shake catches it. The reason is in the timing of the pushes. Running ahead, the pendulum's weight tends to meet the board's push head-on, and loses a little speed to it on every swing; running behind, the pushes arrive at its back and add a little. Either way the pendulum slides into step and stays. Each beat's correction is tiny — with a gentle shake, closing the gap takes dozens of beats — but it always points the same way, beat after beat, for as long as it takes.</p>
+
+<p>Now put two metronomes on a free board, and each plays both parts at once: each shakes the board with its swing, and each has its timing pulled by the shaking of the other.</p>
+
+<div class="demo" id="demo-two"></div>
+
+<p>The two dots on the circle mark each metronome's phase, its position in its cycle. Start the demo and speed time up, and the dots drift toward each other until they merge. Then make the base heavier and randomize again: the pushes weaken and agreement takes much longer. On a base too heavy to move, it never comes.</p>
+
+<p>This is also the place to settle our debt to Huygens, whose clocks agreed in <em>opposition</em> where our metronomes agree in step. Both arrangements are stable ways for two pendulums to share a support, and the support decides between them. A board that is light and free to roll is moved most by pendulums swinging together, and its motion recruits them further — moving in step is self-reinforcing. Huygens's clocks instead hung from a heavy beam that barely moved and mostly drained away whatever energy reached it; there, the arrangement that survives is the one that shakes the support least, and two pendulums in opposition cancel each other's recoil exactly. Our metronomes can be talked into Huygens's choice too: in the playground further down, two metronomes on the lightest base with the roller friction turned all the way up will lock in opposition instead of step.</p>
+
+<h2>Measuring togetherness</h2>
+
+<p>With more metronomes it helps to have a single number for how synchronized the group is. Place every phase on a circle, as we did above, and find the center of mass of the dots. The distance of that center from the middle of the circle is called the <em>order parameter</em>, written <em>r</em>. When the phases are scattered, the dots surround the center and <em>r</em> is near 0. When they agree, the dots gather at one point and <em>r</em> reaches 1.</p>
+
+<p>Get a feel for it by hand — drag the dots around the circle and watch the arrow, whose length is <em>r</em>:</p>
+
+<div class="demo" id="demo-r-drag"></div>
+
+<p>Notice that <em>r</em> doesn't care <em>where</em> on the circle the dots gather, only how tightly they agree. Now watch the same number measured live, on four metronomes:</p>
+
+<div class="demo" id="demo-order"></div>
+
+<p>The graph records <em>r</em> over time. A typical run wanders for a while, climbs as some of the metronomes catch each other, and then jumps to 1. The <em>net</em> arrow under the board explains the jump. While the phases are scattered, the individual forces largely cancel and the board moves little. As agreement spreads, the forces begin to add, the board swings harder, and its influence on the remaining stragglers grows. The closer the group comes to synchrony, the stronger its pull on whoever is left out.</p>
+
+<h2>Different drummers</h2>
+
+<p>What happens if one metronome is set differently? Below, the middle one runs at half tempo: 72 beats per minute against 144 on either side. Its pendulum is longer — that is how a metronome slows down — and it pushes on the board exactly as hard as the others: half the tempo means a pendulum four times as long, so its weight covers four times the arc at half the pace, which works out to the very same acceleration and the very same force. You can check this against its force band, which is the same width as its neighbors'. All that has changed is that its pushes no longer arrive in rhythm. Before you press play, commit to a guess: will the board's rhythm drag the slow one along? Will the slow one spoil the fast pair's agreement?</p>
+
+<div class="demo" id="demo-halftime"></div>
+
+<p>The two outer metronomes find each other and lock. The middle one never joins: the board's rhythm pushes it forward during half of its cycle and backward during the other half, and over a full cycle the corrections cancel. In the graph, <em>r</em> no longer settles at 1 but oscillates as the slow metronome drifts past the others again and again, like a runner being lapped on a track. Set it back to 1× and the group locks within seconds. The 2× and ¼× settings are worth trying too.</p>
+
+<h2>Playground</h2>
+
+<p>Here is everything at once: up to seven metronomes, any mixture of tempos, an adjustable board, and time running up to a hundred times faster than life. The speaker button in the corner of the page turns on ticking sounds — each metronome gets its own click, spread across the stereo field.</p>
+
+<div class="demo" id="demo-playground"></div>
+
+<p>A few challenges: sync the lightest base at 208 beats per minute, which comes to agreement in seconds; find the heaviest base that still gets there before your patience runs out; set one metronome against six; give the odd tempo some company with two at ½×; and — the promised Huygens experiment — put two metronomes on the lightest base, turn the roller friction all the way up, and watch them lock in opposition instead of step.</p>
+
+<h2>The same story on a bridge</h2>
+
+<p>The metronomes are one costume that this phenomenon wears. For another, consider the Millennium Bridge in London, which opened in June 2000 and closed again two days later. With thousands of people crossing, the deck began to sway from side to side — gently at first, then hard enough that people spread their stances and held the rails. Video from that day shows the crowd doing something familiar: to keep balance on a moving deck, they were timing their steps to the sway, and so pushing on the bridge in unison.</p>
+
+<p>The parts map directly onto our experiment. The deck is the board, except that it hangs on springs and would rather stay still. The pedestrians are the metronomes: each footfall pushes the deck sideways about once per second, and the deck's motion adjusts the timing of their steps. The one new ingredient is damping. A bridge constantly drains energy out of its own swaying, so a small crowd, pushing incoherently, excites nothing. Synchrony has to pay the damping bill before it can grow. Before you touch the crowd slider below, make a prediction: as the crowd grows one walker at a time, does the sway grow with it in proportion?</p>
+
+<div class="demo" id="demo-bridge"></div>
+
+<p>The answer is no — the sway does not grow, until suddenly it does. Below roughly eighty walkers the deck murmurs and nothing builds, no matter how long you wait. Past the threshold the sway ignites: a chance alignment excites the deck, the moving deck recruits more walkers into step, and the loop closes. The real bridge misbehaved with about a hundred and sixty people on a span, and the engineering fix — dozens of added dampers — amounted to raising the price of the wobble until no crowd could pay it.</p>
+
+<h2>Fireflies</h2>
+
+<p>Nothing in the story so far actually requires a mechanical connection. In parts of Southeast Asia, fireflies gather in riverside trees by the thousand, and after nightfall a whole tree will flash in unison. There is no board and no deck; what each firefly shares with the others is only the sight of their flashes.</p>
+
+<p>The classic model of this, due to Mirollo and Strogatz, works like a charging capacitor. Each firefly's internal clock charges toward a threshold; on reaching it, the insect flashes and the clock empties. Seeing a neighbor's flash bumps a firefly's own charge upward — a small, discrete nudge in place of the board's continuous push. A firefly close to firing is bumped over the edge and flashes early; a freshly reset one is barely moved. Repeated over many cycles, this gathers the flashes together.</p>
+
+<div class="demo" id="demo-fireflies"></div>
+
+<p>Watch for avalanches: one flash sets off fireflies that were near threshold, and their flashes set off more. With the coupling at zero the field twinkles at random forever; even a weak coupling gathers it into a common beat within a few dozen flashes. The same mathematics was first written down for the heart. The cells of the sinoatrial node — the heart's natural pacemaker — are electrical oscillators of exactly this charge-and-fire kind, and several thousand of them synchronize this way to produce every beat you have ever had. The firefly model began as a model of them.</p>
+
+<h2>Applause</h2>
+
+<p>Synchronization can also travel by sound. In many concert halls, an audience's applause will settle from a roar into a single unified clap — clap — clap. Physicists who recorded this found something curious: audiences get there by slowing down. Clapping quickly, people's natural tempos are spread too widely for any common beat to take hold. Clapping at half the speed, the spread of tempos narrows, and each person's slight drift toward the rhythm they hear around them becomes enough.</p>
+
+<div class="demo" id="demo-applause"></div>
+
+<p>The demo starts at an eager tempo, too scattered to converge. Drag the tempo down and the room finds its rhythm; drag it back up and the rhythm dissolves. With the speaker button on you can hear both regimes. Here the shared, movable thing is not an object at all — it is the summed sound of the room.</p>
+
+<h2>What does the pulling?</h2>
+
+<p>In the equation, every one of these looks the same: a term that nudges each oscillator's timing toward the timing of the others. But that term is a placeholder. It says <em>that</em> one oscillator influences another without saying <em>how</em>, and the "how" is a different thing in every case — sometimes not physics at all.</p>
+
+<table class="pulltable">
+  <thead>
+    <tr><th>System</th><th>What carries the pull</th><th>How one oscillator moves another</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Metronomes</td>
+      <td><span class="carrier">Force</span>, through the board</td>
+      <td>A swing shoves the board by Newton's third law; the accelerating board leans into every other pendulum, like the tug you feel on a braking bus. Nothing is sensed or decided — only momentum, shared through a movable object.</td>
+    </tr>
+    <tr>
+      <td>Fireflies</td>
+      <td><span class="carrier">Light</span>, triggering a reflex</td>
+      <td>Each firefly's neural clock charges toward a flash and resets. Seeing a neighbor's flash jolts that clock a little closer to firing — a hardwired reflex, light in and timing-shift out. The unison is emergent; no firefly perceives the group's rhythm.</td>
+    </tr>
+    <tr>
+      <td>Heart cells</td>
+      <td><span class="carrier">Electric current</span>, through cell walls</td>
+      <td>The same charge-and-fire clock, wired differently: neighboring pacemaker cells are joined by channels through which the firing of one passes current into the next, bumping it toward its own threshold.</td>
+    </tr>
+    <tr>
+      <td>Applause</td>
+      <td><span class="carrier">Sound</span>, entraining the body</td>
+      <td>Each person hears the summed clapping of the room, and a reflexive coupling between hearing and moving — the same one that lets you tap a foot to music — pulls the next clap toward the beat, below the level of conscious choice.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Physically these have nothing in common: a force, a photon, an ionic current, a heard beat. What they share is subtler. In each, the disturbance's effect depends on <em>when</em> in the cycle it arrives — a nudge that lands just before an oscillator would have fired moves it more than one arriving just after. Synchrony grows whenever that timing-sensitivity, averaged out, tells the ones running ahead to wait and the ones running behind to hurry. The carrier can be almost anything. This one property is what has to be shared.</p>
+
+<h2>Only phases</h2>
+
+<p>Strip away the boards, decks, flashes and claps, and the same skeleton has been underneath every demonstration on this page: a collection of oscillators, each described by nothing but where it is in its cycle, each pulled a little toward the rhythm of the crowd. In 1975 Yoshiki Kuramoto wrote that skeleton down as an equation and solved it. His model has two knobs — how strongly the oscillators pull on one another, and how widely their natural tempos are spread — and it makes a sharp prediction: order appears only when the pull exceeds a critical value set by the spread, and when it appears, it appears suddenly.</p>
+
+<div class="demo" id="demo-kuramoto"></div>
+
+<p>Each dot is an oscillator moving around the circle, colored by its natural tempo from slow blue to fast red; the gray arrow is the crowd's average, whose length is <em>r</em>. At low coupling the dots spread evenly and the arrow stays short. Raise the coupling past the critical point and a clump condenses, gathering the middle tempos first while the fastest and slowest keep orbiting alone. The readout under the demo computes the critical coupling for the current spread — carry the coupling slider across it in both directions, or hold the coupling still and widen the spread until the order you built dissolves. The metronomes, the bridge, the fireflies and the applause are this picture wearing four different bodies.</p>
+
+<h2>Closing words</h2>
+
+<p>Huygens watched two clocks agree on a beam and called it sympathy. Three and a half centuries later, the same arrangement has been found in bridges and trees, in theatres and in every beating heart — and on this page we have watched it work through wood, steel, light and sound. The requirements are few: many things keeping a rhythm, each holding its rhythm loosely, and some way, almost any way, for each to feel the others keeping theirs. Given that, and time, they end up keeping it together.</p>
+
+<div class="smallprint">
+<p><b>About the model.</b> Each metronome is simulated as a pendulum with a van der Pol escapement (a self-sustaining oscillator with a preferred amplitude), mounted on a platform that rolls with light friction and is coupled to the pendulums through Newton's third law — essentially the model in Pantaleone's paper below. The equations are integrated with fourth-order Runge–Kutta at 600 steps per simulated second. The pendulums' small-angle frequencies are corrected by the factor 0.9411 so that the escapement's limit cycle ticks at the labeled BPM, and the dashed amplitude guides mark the limit-cycle amplitude itself. Board and roller motion are drawn at 2× scale so the wobble is visible; the force arrows show the actual coupling term from the equations. In the shaken-board demo the same pendulum rides a prescribed sinusoidal shake, and the shake's phase marker is drawn at the offset the pendulum locks to, so that "in step" reads as zero. The bridge, firefly, applause and phase demos follow the models cited below, with parameters adjusted so that the interesting behavior sits within reach of the sliders.</p>
+<p><b>Further reading:</b></p>
+<ul>
+  <li><a href="https://sciencedemonstrations.fas.harvard.edu/presentations/synchronization-metronomes">Synchronization of Metronomes</a> — the Harvard lecture demonstration that inspired this page.</li>
+  <li>J. Pantaleone, <a href="https://doi.org/10.1119/1.1501118">“Synchronization of metronomes”</a>, <em>American Journal of Physics</em> 70, 992 (2002).</li>
+  <li>M. Bennett, M. Schatz, H. Rockwood &amp; K. Wiesenfeld, <a href="https://doi.org/10.1098/rspa.2001.0888">“Huygens's clocks”</a>, <em>Proceedings of the Royal Society A</em> 458, 563 (2002) — why Huygens saw opposition where light rolling boards give unison.</li>
+  <li>S. Strogatz, D. Abrams, A. McRobie, B. Eckhardt &amp; E. Ott, <a href="https://doi.org/10.1038/438043a">“Crowd synchrony on the Millennium Bridge”</a>, <em>Nature</em> 438, 43 (2005) — the bridge demo.</li>
+  <li>R. Mirollo &amp; S. Strogatz, “Synchronization of pulse-coupled biological oscillators”, <em>SIAM Journal on Applied Mathematics</em> 50, 1645 (1990), building on C. Peskin's 1975 model of cardiac pacemaker cells — the firefly demo.</li>
+  <li>Z. Néda, E. Ravasz, Y. Brechet, T. Vicsek &amp; A.-L. Barabási, <a href="https://doi.org/10.1038/35002660">“The sound of many hands clapping”</a>, <em>Nature</em> 403, 849 (2000) — the applause demo.</li>
+  <li>Y. Kuramoto's 1975 phase model — the final demo. S. Strogatz, <a href="https://doi.org/10.1016/S0167-2789(00)00094-4">“From Kuramoto to Crawford”</a>, <em>Physica D</em> 143, 1 (2000) is a readable survey.</li>
+  <li>Steven Strogatz, <em>Sync: The Emerging Science of Spontaneous Order</em> — the book-length version of the closing paragraph.</li>
+</ul>
+</div>
+
+</article>
+
+<button id="soundToggle" class="soundtoggle" title="Toggle tick sounds" aria-label="Toggle tick sounds" aria-pressed="false">🔇</button>
+
+<script>
+"use strict";
+
+/* ============================== Physics ============================== */
+
+const G = 9.81;
+const DT = 1 / 600;              // fixed physics timestep (sim seconds)
+const THETA0 = 0.45;             // escapement reference amplitude (rad)
+const MU = 0.35;                 // escapement strength (van der Pol)
+const LIMIT_AMP = 0.905;         // actual limit-cycle amplitude (~2×THETA0, measured)
+const FREQ_CORR = 0.9411;        // limit-cycle frequency / small-angle frequency (measured)
+const PEND_M = 0.05;             // pendulum bob mass (kg)
+const BASE_K = 1.5;              // weak centering spring so board doesn't drift off (N/m)
+
+const COLORS = ['#0a84ff','#ff9500','#ff375f','#30b158','#bf5af2','#e6b800','#00b3c7'];
+const MULTS = [
+  { v: 0.25, label: '¼×' },
+  { v: 0.5,  label: '½×' },
+  { v: 1,    label: '1×' },
+  { v: 2,    label: '2×' },
+];
+
+function omegaFromBPM(bpm) {
+  // Each beat is a half swing: full period T = 2 * 60/bpm.
+  // Divided by FREQ_CORR so the escapement's limit cycle (which runs ~6%
+  // below the small-angle frequency) actually ticks at the labeled bpm.
+  return Math.PI * bpm / 60 / FREQ_CORR;
+}
+
+class Sim {
+  constructor({ n = 1, bpm = 144, M = 0.75, c = 0.42, mult = null, escapement = true, fixedBase = false }) {
+    this.n = n;
+    this.bpm = bpm;
+    this.M = M;
+    this.c = c;
+    this.escapement = escapement;
+    this.fixedBase = fixedBase;
+    this.mult = mult ? mult.slice() : new Array(n).fill(1);
+    this.omega = new Array(n);
+    this.L = new Array(n);
+    this.time = 0;
+    this.ticks = [];
+    this.updateFrequencies();
+    this.state = new Float64Array(2 + 2 * n);
+    this.prevTheta = new Float64Array(n);
+    this._k1 = new Float64Array(this.state.length);
+    this._k2 = new Float64Array(this.state.length);
+    this._k3 = new Float64Array(this.state.length);
+    this._k4 = new Float64Array(this.state.length);
+    this._tmp = new Float64Array(this.state.length);
+    this.randomizePhases();
+  }
+
+  updateFrequencies() {
+    for (let i = 0; i < this.n; i++) {
+      this.omega[i] = omegaFromBPM(this.bpm * this.mult[i]);
+      this.L[i] = G / (this.omega[i] * this.omega[i]);
+    }
+  }
+
+  randomizePhases() {
+    this.state[0] = 0; this.state[1] = 0;
+    for (let i = 0; i < this.n; i++) {
+      const phi = Math.random() * 2 * Math.PI;
+      this.state[2 + 2*i] = LIMIT_AMP * Math.cos(phi);
+      this.state[3 + 2*i] = -LIMIT_AMP * this.omega[i] * Math.sin(phi);
+      this.prevTheta[i] = this.state[2 + 2*i];
+    }
+    this.time = 0;
+  }
+
+  setSwing(theta) {
+    for (let i = 0; i < this.n; i++) {
+      this.state[2 + 2*i] = theta;
+      this.state[3 + 2*i] = 0;
+    }
+  }
+
+  deriv(s, ds) {
+    const x = s[0], v = s[1];
+    let sumF = 0, denom = this.M;
+    for (let i = 0; i < this.n; i++) {
+      const th = s[2 + 2*i], w = s[3 + 2*i];
+      const om = this.omega[i], L = this.L[i];
+      const esc = this.escapement
+        ? MU * om * (1 - (th * th) / (THETA0 * THETA0)) * w
+        : -0.05 * om * w;           // escapement off: plain friction
+      const A = -om * om * Math.sin(th) + esc;
+      const ct = Math.cos(th), st = Math.sin(th);
+      sumF += PEND_M * L * (A * ct - w * w * st);
+      denom += PEND_M * st * st;
+      ds[2 + 2*i] = w;
+      ds[3 + 2*i] = A;
+    }
+    const a = this.fixedBase ? 0 : (-this.c * v - BASE_K * x - sumF) / denom;
+    ds[0] = this.fixedBase ? 0 : v;
+    ds[1] = a;
+    for (let i = 0; i < this.n; i++) {
+      ds[3 + 2*i] -= (a / this.L[i]) * Math.cos(s[2 + 2*i]);
+    }
+  }
+
+  rk4Step(dt) {
+    const s = this.state, len = s.length;
+    const { _k1: k1, _k2: k2, _k3: k3, _k4: k4, _tmp: t } = this;
+    this.deriv(s, k1);
+    for (let j = 0; j < len; j++) t[j] = s[j] + 0.5 * dt * k1[j];
+    this.deriv(t, k2);
+    for (let j = 0; j < len; j++) t[j] = s[j] + 0.5 * dt * k2[j];
+    this.deriv(t, k3);
+    for (let j = 0; j < len; j++) t[j] = s[j] + dt * k3[j];
+    this.deriv(t, k4);
+    for (let j = 0; j < len; j++) s[j] += (dt / 6) * (k1[j] + 2*k2[j] + 2*k3[j] + k4[j]);
+  }
+
+  advance(total) {
+    this.ticks.length = 0;
+    let remaining = total;
+    while (remaining > 1e-9) {
+      const dt = Math.min(DT, remaining);
+      this.rk4Step(dt);
+      this.time += dt;
+      for (let i = 0; i < this.n; i++) {
+        const th = this.state[2 + 2*i];
+        if (th * this.prevTheta[i] < 0) this.ticks.push(i);
+        this.prevTheta[i] = th;
+      }
+      remaining -= dt;
+    }
+  }
+
+  // Horizontal force each pendulum exerts on the board right now (N, +x = right)
+  pendForces() {
+    if (!this._fd) this._fd = new Float64Array(this.state.length);
+    if (!this._forces) this._forces = new Float64Array(this.n);
+    this.deriv(this.state, this._fd);
+    for (let i = 0; i < this.n; i++) {
+      const th = this.state[2 + 2*i], w = this.state[3 + 2*i];
+      const thdd = this._fd[3 + 2*i];
+      this._forces[i] = -PEND_M * this.L[i] * (thdd * Math.cos(th) - w * w * Math.sin(th));
+    }
+    return this._forces;
+  }
+
+  phase(i) {
+    const th = this.state[2 + 2*i], w = this.state[3 + 2*i];
+    return Math.atan2(-w / this.omega[i], th);
+  }
+
+  orderParameter() {
+    let re = 0, im = 0;
+    for (let i = 0; i < this.n; i++) {
+      const p = this.phase(i);
+      re += Math.cos(p); im += Math.sin(p);
+    }
+    return Math.hypot(re, im) / this.n;
+  }
+}
+
+/* ============================== Rendering ============================== */
+
+const PPM = 400;          // pixels per meter
+const WOBBLE_EXAG = 2;    // visual exaggeration of board motion
+const FSCALE = 340;       // px per newton for force arrows
+
+function drawWorld(d) {
+  const { ctx, sim } = d;
+  const W = d.canvas.width, H = d.canvas.height;
+  const n = sim.n;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#f3f4f6';
+  ctx.fillRect(0, 0, W, H);
+
+  const showForces = d.opts.forces;
+  const showNet = showForces && n > 1;
+  const spacing = Math.min(135, (W - 160) / n);
+
+  if (sim.fixedBase) {
+    const surfaceY = H - 56;
+    ctx.strokeStyle = '#c9ccd4';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(30, surfaceY);
+    ctx.lineTo(W - 30, surfaceY);
+    ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      const cx = W / 2 + spacing * (i - (n - 1) / 2);
+      drawMetronome(d, i, cx, surfaceY);
+    }
+    if (d.opts.phaseInset) drawPhaseInset(d, W - 66, 66);
+    return;
+  }
+
+  const boardY = H - (showNet ? 160 : (showForces ? 126 : 96));
+  const totalW = spacing * n + 70;
+  const left = (W - totalW) / 2;
+  const xDisp = sim.state[0] * PPM * WOBBLE_EXAG;
+
+  // ground
+  ctx.strokeStyle = '#c9ccd4';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(30, boardY + 52);
+  ctx.lineTo(W - 30, boardY + 52);
+  ctx.stroke();
+
+  // rollers (cans)
+  const rollerR = 19;
+  const rollerY = boardY + 52 - rollerR;
+  const rollAngle = (sim.state[0] * WOBBLE_EXAG) / (rollerR / PPM);
+  for (const fx of [0.28, 0.72]) {
+    const rx = left + totalW * fx + xDisp * 0.5;
+    ctx.fillStyle = '#c3c8d2';
+    ctx.beginPath();
+    ctx.arc(rx, rollerY, rollerR, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = '#a4aab8';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = '#9299a9';
+    ctx.lineWidth = 2.5;
+    for (let k = 0; k < 3; k++) {
+      const a = rollAngle + k * Math.PI * 2 / 3;
+      ctx.beginPath();
+      ctx.moveTo(rx, rollerY);
+      ctx.lineTo(rx + Math.cos(a) * (rollerR - 4), rollerY + Math.sin(a) * (rollerR - 4));
+      ctx.stroke();
+    }
+  }
+
+  // board
+  ctx.fillStyle = '#c89e6e';
+  ctx.strokeStyle = '#b3854f';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(left + xDisp, boardY, totalW, 13, 4);
+  ctx.fill(); ctx.stroke();
+
+  // metronomes
+  for (let i = 0; i < n; i++) {
+    const cx = left + xDisp + 35 + spacing * (i + 0.5);
+    drawMetronome(d, i, cx, boardY);
+  }
+
+  if (showForces) {
+    const forces = sim.pendForces();
+    const rowY = boardY + 76;
+    const netY = rowY + 34;
+    let net = 0;
+    for (let i = 0; i < n; i++) {
+      net += forces[i];
+      d.peaks[i] = Math.max(Math.abs(forces[i]), d.peaks[i] * 0.985);
+      const cx = left + xDisp + 35 + spacing * (i + 0.5);
+      drawPeakBand(ctx, cx, rowY, d.peaks[i] * FSCALE, spacing / 2 - 14, COLORS[i % COLORS.length]);
+      drawForceArrow(ctx, cx, rowY, forces[i] * FSCALE, spacing / 2 - 14, COLORS[i % COLORS.length], 3.5);
+    }
+    ctx.fillStyle = '#9aa0ad';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('shove on board', 38, rowY + 4);
+    if (showNet) {
+      d.peaks[7] = Math.max(Math.abs(net), d.peaks[7] * 0.985);
+      const midX = left + xDisp + totalW / 2;
+      drawPeakBand(ctx, midX, netY, d.peaks[7] * FSCALE, totalW / 2 - 10, '#444');
+      drawForceArrow(ctx, midX, netY, net * FSCALE, totalW / 2 - 10, '#444', 5);
+      ctx.fillStyle = '#9aa0ad';
+      ctx.fillText('net', 38, netY + 4);
+    }
+  }
+
+  if (d.opts.phaseInset) drawPhaseInset(d, W - 66, 66);
+}
+
+function drawMetronome(d, i, cx, baseY) {
+  const { ctx, sim } = d;
+  const color = COLORS[i % COLORS.length];
+  const th = sim.state[2 + 2*i];
+  const bodyH = 148, baseW = 74, topW = 40;
+  const pivotY = baseY - 34;
+
+  // body
+  ctx.fillStyle = '#c7ccd7';
+  ctx.strokeStyle = '#aab0be';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - baseW/2, baseY);
+  ctx.lineTo(cx - topW/2, baseY - bodyH);
+  ctx.lineTo(cx + topW/2, baseY - bodyH);
+  ctx.lineTo(cx + baseW/2, baseY);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // slot
+  ctx.fillStyle = '#9299a8';
+  ctx.beginPath();
+  ctx.roundRect(cx - 5, baseY - bodyH + 10, 10, bodyH - 52, 5);
+  ctx.fill();
+
+  const rodLen = 122;
+  const effBPM = sim.bpm * sim.mult[i];
+  const wPos = 46 + (1 - Math.min(1, Math.max(0, (effBPM - 40) / 168))) * 62;
+
+  // amplitude guides
+  if (d.opts.ampGuides) {
+    ctx.save();
+    ctx.translate(cx, pivotY);
+    ctx.strokeStyle = '#b9bfcb';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 5]);
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.sin(s * LIMIT_AMP) * rodLen, -Math.cos(s * LIMIT_AMP) * rodLen);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // ghost pendulum keeping the undisturbed timing (escapement demo)
+  if (d.ghostSim) {
+    const gth = d.ghostSim.state[2 + 2*i];
+    ctx.save();
+    ctx.translate(cx, pivotY);
+    ctx.rotate(gth);
+    ctx.strokeStyle = 'rgba(140,147,163,0.55)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, 10);
+    ctx.lineTo(0, -rodLen);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(140,147,163,0.45)';
+    ctx.beginPath();
+    ctx.roundRect(-9, -wPos - 11, 18, 22, 4);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // pendulum rod + sliding weight
+  ctx.save();
+  ctx.translate(cx, pivotY);
+  ctx.rotate(th);
+  ctx.strokeStyle = '#3f4450';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, 10);
+  ctx.lineTo(0, -rodLen);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(-9, -wPos - 11, 18, 22, 4);
+  ctx.fill(); ctx.stroke();
+  if (d.flash[i] > 0.02) {
+    ctx.globalAlpha = d.flash[i] * 0.55;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(0, -wPos, 20, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  // pivot cap
+  ctx.fillStyle = '#6b7284';
+  ctx.beginPath();
+  ctx.arc(cx, pivotY, 4.5, 0, 2 * Math.PI);
+  ctx.fill();
+
+  // label
+  ctx.fillStyle = '#8a90a0';
+  ctx.font = '600 12px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${Math.round(effBPM)} BPM`, cx, baseY + 32);
+}
+
+function drawPeakBand(ctx, x, y, halfLen, maxLen, color) {
+  halfLen = Math.min(maxLen, halfLen);
+  if (halfLen < 2) return;
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.roundRect(x - halfLen, y - 4, halfLen * 2, 8, 4);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function drawForceArrow(ctx, x, y, len, maxLen, color, width) {
+  len = Math.max(-maxLen, Math.min(maxLen, len));
+  ctx.strokeStyle = '#b9bfcb';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 8);
+  ctx.lineTo(x, y + 8);
+  ctx.stroke();
+  if (Math.abs(len) < 3) return;
+  const tip = x + len, dir = Math.sign(len);
+  const head = Math.min(9, Math.abs(len) * 0.5);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(tip - dir * head, y);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(tip, y);
+  ctx.lineTo(tip - dir * head, y - head * 0.65);
+  ctx.lineTo(tip - dir * head, y + head * 0.65);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawPhaseInset(d, cx, cy) {
+  const { ctx, sim } = d;
+  const R = 44;
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#dcdfe6';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R + 10, 0, 2 * Math.PI);
+  ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#e4e6ec';
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+  ctx.stroke();
+
+  let re = 0, im = 0;
+  for (let i = 0; i < sim.n; i++) {
+    const p = sim.phase(i);
+    re += Math.cos(p); im += Math.sin(p);
+  }
+  re /= sim.n; im /= sim.n;
+  ctx.strokeStyle = '#c0c4cc';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + re * R, cy - im * R);
+  ctx.stroke();
+
+  for (let i = 0; i < sim.n; i++) {
+    const p = sim.phase(i);
+    ctx.fillStyle = COLORS[i % COLORS.length];
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(p) * R, cy - Math.sin(p) * R, 5.5, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+}
+
+function drawGraph(d) {
+  const ctx = d.gctx, W = d.graph.width, H = d.graph.height;
+  ctx.clearRect(0, 0, W, H);
+  const padL = 30, padR = 10, padT = 10, padB = 20;
+  const gw = W - padL - padR, gh = H - padT - padB;
+
+  ctx.strokeStyle = '#eceef2';
+  ctx.lineWidth = 1;
+  ctx.fillStyle = '#a7abb6';
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.textAlign = 'right';
+  const ticks = d.graphTicks || [['0.0', 0], ['0.5', 0.5], ['1.0', 1]];
+  for (const [lab, frac] of ticks) {
+    const y = padT + gh * (1 - frac);
+    ctx.beginPath();
+    ctx.moveTo(padL, y); ctx.lineTo(W - padR, y);
+    ctx.stroke();
+    ctx.fillText(lab, padL - 5, y + 3);
+  }
+  const span = d.history.length * d.sampleInterval;
+  ctx.textAlign = 'center';
+  const caption = d.graphCaption
+    ? d.graphCaption(span)
+    : `r over 0 – ${formatTime(span)} of simulated time`;
+  ctx.fillText(span > 0 ? caption : '', W / 2, H - 6);
+
+  if (d.history.length > 1) {
+    ctx.strokeStyle = '#0a84ff';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    for (let i = 0; i < d.history.length; i++) {
+      const x = padL + (i / (d.history.length - 1)) * gw;
+      const y = padT + gh * (1 - Math.min(1, d.history[i]));
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+}
+
+function formatTime(s) {
+  if (s < 120) return s.toFixed(0) + ' s';
+  return (s / 60).toFixed(1) + ' min';
+}
+
+/* ============================== Demo scaffolding ============================== */
+
+const demos = [];
+
+class DemoShell {
+  constructor(elId, opts = {}) {
+    this.box = document.getElementById(elId);
+    this.opts = opts;
+    this.speed = opts.speed || 1;
+    this.paused = true;
+    this.visible = false;
+    this.t = 0;
+
+    this.wrap = document.createElement('div');
+    this.wrap.className = 'canvaswrap';
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = opts.w || 620;
+    this.canvas.height = opts.h || 360;
+    this.canvas.setAttribute('role', 'img');
+    this.canvas.setAttribute('aria-label', opts.label || 'Interactive physics simulation');
+    this.ctx = this.canvas.getContext('2d');
+    this.wrap.appendChild(this.canvas);
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'overlay';
+    this.overlay.innerHTML = '<div class="playbtn">▶</div>';
+    this.overlay.addEventListener('click', () => this.start());
+    this.canvas.addEventListener('click', () => this.pause());
+    this.wrap.appendChild(this.overlay);
+    this.pausehint = document.createElement('div');
+    this.pausehint.className = 'pausehint';
+    this.pausehint.textContent = '❚❚ click to pause';
+    this.wrap.appendChild(this.pausehint);
+    this.box.appendChild(this.wrap);
+
+    if (opts.graph) {
+      this.history = [];
+      this.sampleInterval = 0.25;
+      this.nextSample = 0;
+      const gw = document.createElement('div');
+      gw.className = 'graphwrap';
+      this.graph = document.createElement('canvas');
+      this.graph.width = Math.min(720, this.canvas.width - 40);
+      this.graph.height = 140;
+      this.gctx = this.graph.getContext('2d');
+      gw.appendChild(this.graph);
+      this.box.appendChild(gw);
+    }
+
+    if (opts.readout) {
+      this.readout = document.createElement('div');
+      this.readout.className = 'readout';
+      this.readout.innerHTML = `<span class="rtext"></span><span class="chip">in sync</span>`;
+      this.box.appendChild(this.readout);
+      this.syncSince = null;
+    }
+
+    this.controls = document.createElement('div');
+    this.controls.className = 'controls';
+    // touching any control wakes the demo up
+    this.controls.addEventListener('input', () => { if (this.paused) this.start(); });
+    this.controls.addEventListener('click', e => {
+      if (this.paused && (e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT')) this.start();
+    });
+    this.box.appendChild(this.controls);
+
+    demos.push(this);
+  }
+
+  start() {
+    for (const d of demos) if (d !== this) d.pause();
+    this.paused = false;
+    this.overlay.style.display = 'none';
+    this.pausehint.classList.add('show');
+  }
+
+  pause() {
+    if (this.paused) return;
+    this.paused = true;
+    this.overlay.style.display = 'flex';
+    this.pausehint.classList.remove('show');
+  }
+
+  resetHistory() {
+    if (this.history) { this.history = []; this.sampleInterval = 0.25; this.nextSample = 0; }
+    this.syncSince = null;
+  }
+
+  simTime() { return this.t; }
+  step(dt, realDt) {}
+  render() {}
+  sampleValue() { return 0; }
+  updateReadout() {}
+
+  tick(realDt) {
+    if (this.paused) return;
+    this.step(realDt * this.speed, realDt);
+    if (this.history) {
+      while (this.simTime() >= this.nextSample) {
+        this.history.push(this.sampleValue());
+        this.nextSample += this.sampleInterval;
+        if (this.history.length > 1400) {
+          this.history = this.history.filter((_, idx) => idx % 2 === 0);
+          this.sampleInterval *= 2;
+        }
+      }
+    }
+  }
+
+  draw() {
+    this.render();
+    if (this.graph) drawGraph(this);
+    if (this.readout) this.updateReadout();
+  }
+}
+
+class Demo extends DemoShell {
+  constructor(elId, simOpts, opts = {}) {
+    super(elId, opts);
+    this.sim = new Sim(simOpts);
+    this.flash = new Float32Array(8);
+    this.peaks = new Float32Array(8);
+  }
+
+  simTime() { return this.sim.time; }
+  sampleValue() { return this.sim.orderParameter(); }
+  render() { drawWorld(this); }
+
+  randomize() {
+    this.sim.randomizePhases();
+    this.resetHistory();
+  }
+
+  step(dt, realDt) {
+    this.sim.advance(dt);
+    for (const i of this.sim.ticks) {
+      this.flash[i] = 1;
+      if (soundOn) tickSound(this, i);
+    }
+    for (let i = 0; i < this.flash.length; i++) this.flash[i] *= Math.pow(0.0005, realDt);
+  }
+
+  updateReadout() {
+    const r = this.sim.orderParameter();
+    this.readout.querySelector('.rtext').textContent =
+      `simulated time ${formatTime(this.sim.time)} · r = ${r.toFixed(3)}`;
+    const sameTempo = this.sim.mult.every(m => m === this.sim.mult[0]);
+    if (r > 0.995 && sameTempo && this.sim.n > 1) {
+      if (this.syncSince === null) this.syncSince = this.sim.time;
+    } else {
+      this.syncSince = null;
+    }
+    this.readout.querySelector('.chip').classList.toggle('on',
+      this.syncSince !== null && this.sim.time - this.syncSince > 3);
+  }
+}
+
+/* ---- a single pendulum on a board shaken by hand ---- */
+
+// Phase the pendulum settles to relative to the board's displacement (measured
+// numerically). The "shake rhythm" marker is drawn at this offset so that the
+// locked state reads as in step.
+const DRIVE_LOCK = -0.323 * 2 * Math.PI;
+
+class DrivenDemo extends DemoShell {
+  constructor(elId, opts = {}) {
+    super(elId, opts);
+    this.om0 = omegaFromBPM(144);        // pendulum's small-angle frequency
+    this.omd = this.om0 * FREQ_CORR;     // shake at the true ticking frequency
+    this.L = G / (this.om0 * this.om0);
+    this.Ad = 0.01;                      // shake amplitude, m
+    this.flash = new Float32Array(1);
+    // shim so drawMetronome and tickSound can treat this like a Sim demo
+    this.sim = { n: 1, state: [0, 0, 0, 0], bpm: 144, mult: [1] };
+    this.setOffset(-0.25);
+  }
+
+  drivePhase() { return this.omd * this.t - Math.PI / 2 + DRIVE_LOCK; }
+
+  setOffset(cycles) {
+    this.t = 0;
+    const phi = this.drivePhase() + cycles * 2 * Math.PI;
+    this.th = LIMIT_AMP * Math.cos(phi);
+    this.w = -LIMIT_AMP * this.omd * Math.sin(phi);
+    this.prevTh = this.th;
+    this.resetHistory();
+  }
+
+  gap() { // pendulum minus shake, in cycles, wrapped to [-0.5, 0.5)
+    const pp = Math.atan2(-this.w / this.omd, this.th);
+    let g = (pp - this.drivePhase()) / (2 * Math.PI);
+    g -= Math.round(g);
+    return g;
+  }
+
+  step(dt, realDt) {
+    const steps = Math.max(1, Math.round(dt / DT));
+    const h = dt / steps;
+    const f = (t, th, w) => {
+      const a = -this.Ad * this.omd * this.omd * Math.sin(this.omd * t);
+      const esc = MU * this.om0 * (1 - th * th / (THETA0 * THETA0)) * w;
+      return [w, -this.om0 * this.om0 * Math.sin(th) + esc - (a / this.L) * Math.cos(th)];
+    };
+    for (let s = 0; s < steps; s++) {
+      const t = this.t, th = this.th, w = this.w;
+      const k1 = f(t, th, w);
+      const k2 = f(t + h/2, th + h/2 * k1[0], w + h/2 * k1[1]);
+      const k3 = f(t + h/2, th + h/2 * k2[0], w + h/2 * k2[1]);
+      const k4 = f(t + h, th + h * k3[0], w + h * k3[1]);
+      this.th += h/6 * (k1[0] + 2*k2[0] + 2*k3[0] + k4[0]);
+      this.w  += h/6 * (k1[1] + 2*k2[1] + 2*k3[1] + k4[1]);
+      this.t += h;
+      if (this.th * this.prevTh < 0) {
+        this.flash[0] = 1;
+        if (soundOn) tickSound(this, 0);
+      }
+      this.prevTh = this.th;
+    }
+    this.flash[0] *= Math.pow(0.0005, realDt);
+  }
+
+  sampleValue() { return Math.min(1, Math.max(0, 0.5 + this.gap())); }
+
+  updateReadout() {
+    const beats = this.gap() * 2;
+    const desc = Math.abs(beats) < 0.06 ? 'in step with the shake'
+      : `${Math.abs(beats).toFixed(2)} beats ${beats > 0 ? 'ahead of' : 'behind'} the shake`;
+    this.readout.querySelector('.rtext').textContent =
+      `simulated time ${formatTime(this.t)} · ${desc}`;
+    if (Math.abs(beats) < 0.06) {
+      if (this.syncSince === null) this.syncSince = this.t;
+    } else {
+      this.syncSince = null;
+    }
+    this.readout.querySelector('.chip').classList.toggle('on',
+      this.syncSince !== null && this.t - this.syncSince > 3);
+  }
+
+  render() {
+    const ctx = this.ctx, W = this.canvas.width, H = this.canvas.height;
+    this.sim.state[2] = this.th;
+    this.sim.state[3] = this.w;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(0, 0, W, H);
+
+    const boardY = H - 126;
+    const x = this.Ad * Math.sin(this.omd * this.t);
+    const xDisp = x * PPM * WOBBLE_EXAG;
+    const totalW = 205;
+    const left = (W - totalW) / 2;
+
+    // ground
+    ctx.strokeStyle = '#c9ccd4';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(30, boardY + 52);
+    ctx.lineTo(W - 30, boardY + 52);
+    ctx.stroke();
+
+    // rollers
+    const rollerR = 19;
+    const rollerY = boardY + 52 - rollerR;
+    const rollAngle = (x * WOBBLE_EXAG) / (rollerR / PPM);
+    for (const fx of [0.28, 0.72]) {
+      const rx = left + totalW * fx + xDisp * 0.5;
+      ctx.fillStyle = '#c3c8d2';
+      ctx.beginPath();
+      ctx.arc(rx, rollerY, rollerR, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = '#a4aab8';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.strokeStyle = '#9299a9';
+      ctx.lineWidth = 2.5;
+      for (let k = 0; k < 3; k++) {
+        const a = rollAngle + k * Math.PI * 2 / 3;
+        ctx.beginPath();
+        ctx.moveTo(rx, rollerY);
+        ctx.lineTo(rx + Math.cos(a) * (rollerR - 4), rollerY + Math.sin(a) * (rollerR - 4));
+        ctx.stroke();
+      }
+    }
+
+    // board
+    ctx.fillStyle = '#c89e6e';
+    ctx.strokeStyle = '#b3854f';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(left + xDisp, boardY, totalW, 13, 4);
+    ctx.fill(); ctx.stroke();
+
+    drawMetronome(this, 0, left + xDisp + totalW / 2, boardY);
+
+    // the imposed shake, shown as the board's current velocity
+    const v = this.Ad * this.omd * Math.cos(this.omd * this.t);
+    const rowY = boardY + 76;
+    drawForceArrow(ctx, W / 2, rowY, v * 800, 110, '#8a90a0', 4);
+    ctx.fillStyle = '#9aa0ad';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('the shake', 38, rowY + 4);
+
+    // phase circle: gray dot = shake rhythm, colored dot = pendulum
+    const cx = W - 66, cy = 66, R = 44;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#dcdfe6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 10, 0, 2 * Math.PI);
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#e4e6ec';
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.stroke();
+    const pd = this.drivePhase();
+    ctx.fillStyle = '#9aa0ad';
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(pd) * R, cy - Math.sin(pd) * R, 6.5, 0, 2 * Math.PI);
+    ctx.fill();
+    const pp = Math.atan2(-this.w / this.omd, this.th);
+    ctx.fillStyle = COLORS[0];
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(pp) * R, cy - Math.sin(pp) * R, 5.5, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+}
+
+/* ---- control widgets ---- */
+
+function addSlider(demo, { label, min = 0, max = 100, value, fmt, oninput }) {
+  const wrap = document.createElement('div');
+  wrap.className = 'ctl';
+  const lab = document.createElement('label');
+  lab.textContent = label;
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = min; input.max = max; input.value = value;
+  const val = document.createElement('div');
+  val.className = 'val';
+  const update = () => { val.textContent = fmt(parseFloat(input.value)); };
+  input.addEventListener('input', () => { oninput(parseFloat(input.value)); update(); });
+  update();
+  wrap.append(lab, input, val);
+  demo.controls.appendChild(wrap);
+  return input;
+}
+
+function addButton(demo, label, onclick) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.addEventListener('click', () => onclick(b));
+  demo.controls.appendChild(b);
+  return b;
+}
+
+function speedSlider(demo, { min = 1, max = 64, initial = demo.speed } = {}) {
+  const lo = Math.log10(min), hi = Math.log10(max);
+  const toSpeed = v => Math.pow(10, lo + (v / 100) * (hi - lo));
+  const initV = 100 * (Math.log10(initial) - lo) / (hi - lo);
+  demo.speed = initial;
+  return addSlider(demo, {
+    label: 'time speed', value: initV,
+    fmt: v => { const s = toSpeed(v); return (s < 10 ? s.toFixed(1) : s.toFixed(0)) + '×'; },
+    oninput: v => { demo.speed = toSpeed(v); },
+  });
+}
+
+function baseWeightSlider(demo, initial = 35) {
+  const toM = v => 0.15 * Math.pow(10, (v / 100) * 2);
+  demo.sim.M = toM(initial);
+  return addSlider(demo, {
+    label: 'base weight', value: initial,
+    fmt: v => toM(v).toFixed(2) + ' kg',
+    oninput: v => { demo.sim.M = toM(v); },
+  });
+}
+
+function multiplierChips(demo, onchange) {
+  const chips = document.createElement('div');
+  chips.className = 'chips';
+  const rebuild = () => {
+    chips.innerHTML = '';
+    for (let i = 0; i < demo.sim.n; i++) {
+      const chip = document.createElement('span');
+      chip.className = 'metchip';
+      const sw = document.createElement('span');
+      sw.className = 'swatch';
+      sw.style.background = COLORS[i % COLORS.length];
+      const sel = document.createElement('select');
+      for (const m of MULTS) {
+        const opt = document.createElement('option');
+        opt.value = m.v; opt.textContent = m.label;
+        if (m.v === demo.sim.mult[i]) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.addEventListener('change', () => {
+        demo.sim.mult[i] = parseFloat(sel.value);
+        demo.sim.updateFrequencies();
+        demo.syncSince = null;
+        if (onchange) onchange();
+      });
+      chip.append(sw, `#${i+1}`, sel);
+      chips.appendChild(chip);
+    }
+  };
+  rebuild();
+  demo.controls.appendChild(chips);
+  return rebuild;
+}
+
+/* ---- sound (global toggle, bottom-right) ---- */
+
+let soundOn = false;
+let audioCtx = null;
+let clicksThisFrame = 0;
+function tickSound(demo, i) {
+  if (!audioCtx || audioCtx.state !== 'running') return;
+  if (clicksThisFrame >= 8) return;
+  clicksThisFrame++;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const pan = audioCtx.createStereoPanner ? audioCtx.createStereoPanner() : null;
+  osc.type = 'square';
+  osc.frequency.value = 1800 + i * 120;
+  gain.gain.setValueAtTime(0.1, t);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+  osc.connect(gain);
+  if (pan) {
+    pan.pan.value = demo.sim.n > 1 ? (i / (demo.sim.n - 1)) * 1.6 - 0.8 : 0;
+    gain.connect(pan); pan.connect(audioCtx.destination);
+  } else {
+    gain.connect(audioCtx.destination);
+  }
+  osc.start(t); osc.stop(t + 0.035);
+}
+
+let noiseBuf = null;
+function clapSound() {
+  if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+  if (clicksThisFrame >= 14) return;
+  clicksThisFrame++;
+  if (!noiseBuf) {
+    noiseBuf = audioCtx.createBuffer(1, Math.round(audioCtx.sampleRate * 0.06), audioCtx.sampleRate);
+    const ch = noiseBuf.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+  }
+  const t = audioCtx.currentTime;
+  const src = audioCtx.createBufferSource();
+  src.buffer = noiseBuf;
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 700 + Math.random() * 900;
+  bp.Q.value = 1.2;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.08, t);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  src.connect(bp); bp.connect(gain); gain.connect(audioCtx.destination);
+  src.start(t);
+}
+
+/* ============================== The parallels ============================== */
+
+function gauss4() {
+  return (Math.random() + Math.random() + Math.random() + Math.random() - 2) * Math.sqrt(3);
+}
+
+function meanField(phases) {
+  let re = 0, im = 0;
+  for (const p of phases) { re += Math.cos(p); im += Math.sin(p); }
+  return { r: Math.hypot(re, im) / phases.length, psi: Math.atan2(im, re) };
+}
+
+// Millennium Bridge: sprung, damped deck + walkers whose step timing responds
+// to deck motion (Strogatz et al., Nature 2005)
+class BridgeDemo extends DemoShell {
+  constructor(elId, opts = {}) {
+    super(elId, opts);
+    this.N = 160;
+    this.M = 1.13e5;                       // modal mass, kg
+    this.w0 = 2 * Math.PI * 1.03;          // lateral mode, Hz
+    this.Ksp = this.M * this.w0 * this.w0;
+    this.B = 2 * 0.007 * this.M * this.w0; // 0.7% damping ratio
+    this.G = 30;                           // lateral force per walker, N
+    this.C = 16;                           // walker sensitivity to deck motion
+    this.sigma = 0.3;                      // spread of step frequencies, rad/s
+    this.restart();
+  }
+
+  restart() {
+    this.t = 0; this.x = 0; this.v = 0; this.env = 0;
+    this.Th = new Float64Array(this.N);
+    this.Om = new Float64Array(this.N);
+    this.px = new Float64Array(this.N);
+    this.py = new Float64Array(this.N);
+    for (let i = 0; i < this.N; i++) {
+      this.Th[i] = Math.random() * 2 * Math.PI;
+      this.Om[i] = this.w0 + this.sigma * gauss4();
+      this.px[i] = Math.random();
+      this.py[i] = Math.random();
+    }
+    this.resetHistory();
+  }
+
+  step(dt) {
+    const sub = Math.max(1, Math.ceil(dt * 240));
+    const h = dt / sub;
+    for (let s = 0; s < sub; s++) {
+      let sum = 0;
+      for (let i = 0; i < this.N; i++) sum += Math.sin(this.Th[i]);
+      const a = (this.G * sum - this.B * this.v - this.Ksp * this.x) / this.M;
+      const A = Math.hypot(this.x, this.v / this.w0);
+      const psi = Math.atan2(-this.v / this.w0, this.x);
+      for (let i = 0; i < this.N; i++) {
+        this.Th[i] += (this.Om[i] + this.C * A * Math.sin(psi - this.Th[i] + Math.PI)) * h;
+      }
+      this.v += a * h;
+      this.x += this.v * h;
+      this.t += h;
+    }
+    this.env = Math.max(Math.abs(this.x), this.env * Math.pow(0.25, dt));
+  }
+
+  sampleValue() { return Math.min(1, this.env / 0.10); }
+
+  updateReadout() {
+    this.readout.querySelector('.rtext').textContent =
+      `simulated time ${formatTime(this.t)} · sway ±${(this.env * 100).toFixed(1)} cm · walkers in step: r = ${meanField(this.Th).r.toFixed(2)}`;
+  }
+
+  render() {
+    const ctx = this.ctx, W = this.canvas.width, H = this.canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(0, 0, W, H);
+    const cy = H / 2, deckH = 120, sway = this.x * 700;
+    ctx.fillStyle = '#d0d3da';
+    ctx.fillRect(0, cy - deckH / 2 - 26, 54, deckH + 52);
+    ctx.fillRect(W - 54, cy - deckH / 2 - 26, 54, deckH + 52);
+    ctx.strokeStyle = '#c2c6cf';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(54, cy); ctx.lineTo(W - 54, cy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#dfe2e8';
+    ctx.strokeStyle = '#b9bec9';
+    ctx.beginPath();
+    ctx.roundRect(54, cy - deckH / 2 + sway, W - 108, deckH, 4);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#5a6478';
+    for (let i = 0; i < this.N; i++) {
+      const wx = 62 + this.px[i] * (W - 124);
+      const wy = cy - deckH / 2 + 12 + this.py[i] * (deckH - 24) + sway + Math.sin(this.Th[i]) * 4;
+      ctx.beginPath();
+      ctx.arc(wx, wy, 3.2, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#9aa0ad';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('top view — deck sway exaggerated for visibility', 62, H - 12);
+  }
+}
+
+// Fireflies: pulse-coupled charge-and-fire oscillators (Mirollo & Strogatz 1990)
+class FireflyDemo extends DemoShell {
+  constructor(elId, opts = {}) {
+    super(elId, opts);
+    this.N = 75;
+    this.eps = 0.0016;
+    this.b = 3;
+    this.restart();
+  }
+
+  restart() {
+    this.t = 0;
+    this.phi = new Float64Array(this.N);
+    this.f = new Float64Array(this.N);
+    this.glow = new Float32Array(this.N);
+    this.px = new Float64Array(this.N);
+    this.py = new Float64Array(this.N);
+    for (let i = 0; i < this.N; i++) {
+      this.phi[i] = Math.random();
+      this.f[i] = 0.55 * (1 + 0.05 * (Math.random() * 2 - 1));
+      this.px[i] = 0.05 + Math.random() * 0.9;
+      this.py[i] = 0.07 + Math.random() * 0.84;
+    }
+    this.resetHistory();
+  }
+
+  step(dt, realDt) {
+    const eb = Math.exp(this.b) - 1;
+    const g = p => Math.log(1 + eb * p) / this.b;
+    const ginv = V => (Math.exp(this.b * V) - 1) / eb;
+    const sub = Math.max(1, Math.ceil(dt * 120));
+    const h = dt / sub;
+    for (let s = 0; s < sub; s++) {
+      const fired = new Set();
+      for (let i = 0; i < this.N; i++) {
+        this.phi[i] += this.f[i] * h;
+        if (this.phi[i] >= 1) fired.add(i);
+      }
+      if (fired.size) {
+        for (const i of fired) { this.phi[i] = 0; this.glow[i] = 1; }
+        let kicks = fired.size;
+        while (kicks > 0 && this.eps > 0) {
+          const nf = [];
+          for (let i = 0; i < this.N; i++) {
+            if (fired.has(i)) continue;
+            const V = g(this.phi[i]) + this.eps * kicks;
+            if (V >= 1) { fired.add(i); nf.push(i); this.phi[i] = 0; this.glow[i] = 1; }
+            else this.phi[i] = ginv(V);
+          }
+          kicks = nf.length;
+        }
+      }
+      this.t += h;
+    }
+    for (let i = 0; i < this.N; i++) this.glow[i] *= Math.pow(0.008, realDt);
+  }
+
+  sampleValue() {
+    let re = 0, im = 0;
+    for (let i = 0; i < this.N; i++) {
+      re += Math.cos(2 * Math.PI * this.phi[i]);
+      im += Math.sin(2 * Math.PI * this.phi[i]);
+    }
+    return Math.hypot(re, im) / this.N;
+  }
+
+  updateReadout() {
+    this.readout.querySelector('.rtext').textContent =
+      `simulated time ${formatTime(this.t)} · r = ${this.sampleValue().toFixed(2)}`;
+  }
+
+  render() {
+    const ctx = this.ctx, W = this.canvas.width, H = this.canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#131722';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, W, H, 8);
+    ctx.fill();
+    for (let i = 0; i < this.N; i++) {
+      const x = this.px[i] * W, y = this.py[i] * H;
+      const glow = this.glow[i];
+      ctx.fillStyle = 'rgba(120,130,160,0.5)';
+      ctx.beginPath();
+      ctx.arc(x, y, 2.2, 0, 2 * Math.PI);
+      ctx.fill();
+      if (glow > 0.02) {
+        ctx.fillStyle = `rgba(255,214,10,${(glow * 0.25).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 14, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255,224,80,${glow.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5 + 3 * glow, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+  }
+}
+
+// Applause: Kuramoto oscillators whose tempo spread grows with clapping speed
+// (Néda et al., Nature 2000)
+class ApplauseDemo extends DemoShell {
+  constructor(elId, opts = {}) {
+    super(elId, opts);
+    this.N = 56;
+    this.K = 1.5;
+    this.fHz = 3.2;
+    this.restart();
+  }
+
+  setTempo(fHz) {
+    this.fHz = fHz;
+    const sigma = 0.63 * Math.pow(fHz / 2, 2);
+    for (let i = 0; i < this.N; i++) this.Om[i] = 2 * Math.PI * fHz + sigma * this.z[i];
+  }
+
+  restart() {
+    this.t = 0;
+    this.Th = new Float64Array(this.N);
+    this.Om = new Float64Array(this.N);
+    this.z = new Float64Array(this.N);
+    this.pulse = new Float32Array(this.N);
+    this.cycles = new Float64Array(this.N);
+    for (let i = 0; i < this.N; i++) {
+      this.Th[i] = Math.random() * 2 * Math.PI;
+      this.z[i] = gauss4();
+      this.cycles[i] = 0;
+    }
+    this.setTempo(this.fHz);
+    this.resetHistory();
+  }
+
+  step(dt, realDt) {
+    const sub = Math.max(1, Math.ceil(dt * 120));
+    const h = dt / sub;
+    for (let s = 0; s < sub; s++) {
+      const { r, psi } = meanField(this.Th);
+      for (let i = 0; i < this.N; i++) {
+        this.Th[i] += (this.Om[i] + this.K * r * Math.sin(psi - this.Th[i])) * h;
+        const c = Math.floor(this.Th[i] / (2 * Math.PI));
+        if (c > this.cycles[i]) {
+          this.cycles[i] = c;
+          this.pulse[i] = 1;
+          clapSound();
+        }
+      }
+      this.t += h;
+    }
+    for (let i = 0; i < this.N; i++) this.pulse[i] *= Math.pow(0.002, realDt);
+  }
+
+  sampleValue() { return meanField(this.Th).r; }
+
+  updateReadout() {
+    this.readout.querySelector('.rtext').textContent =
+      `simulated time ${formatTime(this.t)} · r = ${meanField(this.Th).r.toFixed(2)}`;
+  }
+
+  render() {
+    const ctx = this.ctx, W = this.canvas.width, H = this.canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(0, 0, W, H);
+    const cols = 8;
+    const gx = (W - 150) / (cols - 1), gy = (H - 100) / 6;
+    for (let i = 0; i < this.N; i++) {
+      const row = Math.floor(i / cols);
+      const cx = 70 + (i % cols) * gx + (row % 2 ? gx * 0.22 : 0);
+      const cy = 48 + row * gy;
+      const p = this.pulse[i];
+      ctx.fillStyle = p > 0.15
+        ? `rgba(255,149,0,${(0.35 + 0.65 * p).toFixed(2)})`
+        : '#c7ccd7';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 9 + p * 5, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  }
+}
+
+// Kuramoto: the bare phase model (1975)
+class KuramotoDemo extends DemoShell {
+  constructor(elId, opts = {}) {
+    super(elId, opts);
+    this.N = 45;
+    this.K = 0.4;
+    this.sigma = 0.5;
+    this.fMean = 0.25;
+    this.restart();
+  }
+
+  setSpread(sig) {
+    this.sigma = sig;
+    for (let i = 0; i < this.N; i++) this.Om[i] = 2 * Math.PI * this.fMean + sig * this.z[i];
+  }
+
+  restart() {
+    this.t = 0;
+    this.Th = new Float64Array(this.N);
+    this.z = new Float64Array(this.N);
+    this.Om = new Float64Array(this.N);
+    for (let i = 0; i < this.N; i++) {
+      this.Th[i] = Math.random() * 2 * Math.PI;
+      this.z[i] = gauss4();
+    }
+    this.setSpread(this.sigma);
+    this.resetHistory();
+  }
+
+  step(dt) {
+    const sub = Math.max(1, Math.ceil(dt * 120));
+    const h = dt / sub;
+    for (let s = 0; s < sub; s++) {
+      const { r, psi } = meanField(this.Th);
+      for (let i = 0; i < this.N; i++) {
+        this.Th[i] += (this.Om[i] + this.K * r * Math.sin(psi - this.Th[i])) * h;
+      }
+      this.t += h;
+    }
+  }
+
+  sampleValue() { return meanField(this.Th).r; }
+
+  updateReadout() {
+    // critical coupling for a unit-variance Gaussian spread scaled by sigma:
+    // Kc = 2 / (pi * g(0)) = sigma * 2 * sqrt(2/pi)
+    const Kc = 2 * Math.sqrt(2 / Math.PI) * this.sigma;
+    this.readout.querySelector('.rtext').textContent =
+      `simulated time ${formatTime(this.t)} · r = ${meanField(this.Th).r.toFixed(2)}` +
+      ` · coupling K = ${this.K.toFixed(2)}, critical ≈ ${Kc.toFixed(2)}`;
+  }
+
+  render() {
+    const ctx = this.ctx, W = this.canvas.width, H = this.canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 40;
+    ctx.strokeStyle = '#d5d8de';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.stroke();
+    const { r, psi } = meanField(this.Th);
+    ctx.strokeStyle = '#9aa0ad';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(psi) * r * R, cy - Math.sin(psi) * r * R);
+    ctx.stroke();
+    for (let i = 0; i < this.N; i++) {
+      const u = Math.max(0, Math.min(1, (this.z[i] + 2) / 4));
+      ctx.fillStyle = `hsl(${Math.round(215 - 205 * u)}, 70%, 52%)`;
+      ctx.beginPath();
+      ctx.arc(cx + Math.cos(this.Th[i]) * R, cy - Math.sin(this.Th[i]) * R, 6, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  }
+}
+
+/* ============================== The demos ============================== */
+
+// Hero: five metronomes, already running fast
+{
+  const d = new Demo('demo-hero',
+    { n: 5, M: 0.6 },
+    { w: 860, h: 500, forces: true, readout: true, speed: 8, autoplay: true,
+      label: 'Five metronomes on a rolling board, gradually synchronizing' });
+  addButton(d, 'Restart with random phases', () => d.randomize());
+  speedSlider(d, { min: 1, max: 64, initial: 8 });
+}
+
+// Single metronome on a fixed base, tempo slider
+{
+  const d = new Demo('demo-single',
+    { n: 1, fixedBase: true },
+    { w: 560, h: 330, label: 'A single metronome with an adjustable tempo slider' });
+  d.sim.setSwing(0.35);
+  addSlider(d, {
+    label: 'tempo', min: 40, max: 208, value: 144,
+    fmt: v => v.toFixed(0) + ' BPM',
+    oninput: v => { d.sim.bpm = v; d.sim.updateFrequencies(); },
+  });
+}
+
+// Escapement on/off, with a ghost pendulum keeping the undisturbed timing
+{
+  const d = new Demo('demo-escapement',
+    { n: 1, fixedBase: true },
+    { w: 560, h: 330, ampGuides: true,
+      label: 'A metronome with a switchable escapement and a ghost pendulum showing undisturbed timing' });
+  d.sim.setSwing(0.35);
+  const ghost = new Sim({ n: 1, fixedBase: true });
+  ghost.setSwing(0.35);
+  d.ghostSim = ghost;
+  const baseStep = d.step.bind(d);
+  d.step = (dt, realDt) => { baseStep(dt, realDt); ghost.advance(dt); };
+  addButton(d, 'Nudge the pendulum', () => { d.sim.state[3] += 5; });
+  addButton(d, 'Escapement: on', b => {
+    d.sim.escapement = !d.sim.escapement;
+    ghost.escapement = d.sim.escapement;
+    b.textContent = d.sim.escapement ? 'Escapement: on' : 'Escapement: off';
+    b.classList.toggle('active', !d.sim.escapement);
+  });
+  addButton(d, 'Restart together', () => { d.sim.setSwing(0.35); ghost.setSwing(0.35); });
+}
+
+// One metronome on the rolling board, forces shown
+{
+  const d = new Demo('demo-board',
+    { n: 1, M: 0.4 },
+    { w: 640, h: 400, forces: true,
+      label: 'A metronome on a rolling board, showing the sideways force it exerts' });
+  d.sim.setSwing(0.35);
+  baseWeightSlider(d, 21);
+}
+
+// A pendulum on a board shaken by hand at its own tempo
+{
+  const d = new DrivenDemo('demo-nudge',
+    { w: 680, h: 430, graph: true, readout: true, speed: 4,
+      label: 'A metronome on a board shaken in a steady rhythm, drifting into step with the shake' });
+  d.graphTicks = [['−1', 0], ['0', 0.5], ['+1', 1]];
+  d.graphCaption = span => `beats ahead (+) or behind (−) of the shake, over ${formatTime(span)}`;
+  addButton(d, 'Start ½ beat behind', () => d.setOffset(-0.25));
+  addButton(d, 'Start ½ beat ahead', () => d.setOffset(0.25));
+  addButton(d, 'Random start', () => d.setOffset(Math.random() - 0.5));
+  addSlider(d, {
+    label: 'shake strength', min: 4, max: 40, value: 20,
+    fmt: v => (v / 20).toFixed(1) + ' cm',
+    oninput: v => { d.Ad = v / 2000; },
+  });
+  speedSlider(d, { min: 1, max: 32, initial: 4 });
+}
+
+// Two metronomes, phase inset
+{
+  const d = new Demo('demo-two',
+    { n: 2, M: 0.6 },
+    { w: 720, h: 460, forces: true, phaseInset: true, readout: true, speed: 4,
+      label: 'Two metronomes on a rolling board, drifting into synchrony' });
+  addButton(d, 'Randomize phases', () => d.randomize());
+  speedSlider(d, { min: 1, max: 64, initial: 4 });
+  baseWeightSlider(d, 30);
+}
+
+// Drag-the-dots: direct manipulation of the order parameter
+{
+  const box = document.getElementById('demo-r-drag');
+  const wrap = document.createElement('div');
+  wrap.className = 'canvaswrap';
+  const canvas = document.createElement('canvas');
+  canvas.width = 420;
+  canvas.height = 340;
+  canvas.style.touchAction = 'none';
+  canvas.style.cursor = 'grab';
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', 'Draggable dots on a circle showing how the order parameter r responds');
+  const ctx = canvas.getContext('2d');
+  wrap.appendChild(canvas);
+  box.appendChild(wrap);
+
+  const ph = [0.4, 1.6, 2.8, 4.1, 5.3];
+  const cx = 210, cy = 150, R = 112;
+  let dragging = -1;
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#d5d8de';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.stroke();
+    let re = 0, im = 0;
+    for (const p of ph) { re += Math.cos(p); im += Math.sin(p); }
+    re /= ph.length; im /= ph.length;
+    const r = Math.hypot(re, im);
+    ctx.strokeStyle = '#9aa0ad';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + re * R, cy - im * R);
+    ctx.stroke();
+    ctx.fillStyle = '#9aa0ad';
+    ctx.beginPath();
+    ctx.arc(cx + re * R, cy - im * R, 4, 0, 2 * Math.PI);
+    ctx.fill();
+    for (let i = 0; i < ph.length; i++) {
+      ctx.fillStyle = COLORS[i % COLORS.length];
+      ctx.beginPath();
+      ctx.arc(cx + Math.cos(ph[i]) * R, cy - Math.sin(ph[i]) * R, 9, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#8a90a0';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('drag the dots', cx, 22);
+    ctx.fillStyle = '#333';
+    ctx.font = '600 20px -apple-system, sans-serif';
+    ctx.fillText(`r = ${r.toFixed(2)}`, cx, cy + R + 46);
+  }
+
+  function pos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return [(e.clientX - rect.left) * canvas.width / rect.width,
+            (e.clientY - rect.top) * canvas.height / rect.height];
+  }
+  canvas.addEventListener('pointerdown', e => {
+    const [x, y] = pos(e);
+    let best = -1, bd = 30;
+    ph.forEach((p, i) => {
+      const dist = Math.hypot(x - (cx + Math.cos(p) * R), y - (cy - Math.sin(p) * R));
+      if (dist < bd) { bd = dist; best = i; }
+    });
+    if (best >= 0) {
+      dragging = best;
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = 'grabbing';
+      e.preventDefault();
+    }
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (dragging < 0) return;
+    const [x, y] = pos(e);
+    ph[dragging] = Math.atan2(-(y - cy), x - cx);
+    render();
+  });
+  const drop = () => { dragging = -1; canvas.style.cursor = 'grab'; };
+  canvas.addEventListener('pointerup', drop);
+  canvas.addEventListener('pointercancel', drop);
+  render();
+}
+
+// Four metronomes with the order-parameter graph
+{
+  const d = new Demo('demo-order',
+    { n: 4, M: 0.75 },
+    { w: 860, h: 480, forces: true, graph: true, readout: true, speed: 8,
+      label: 'Four metronomes with a live graph of the order parameter r' });
+  addButton(d, 'Randomize phases', () => d.randomize());
+  speedSlider(d, { min: 1, max: 64, initial: 8 });
+  baseWeightSlider(d, 35);
+}
+
+// Half-time metronome
+{
+  const d = new Demo('demo-halftime',
+    { n: 3, M: 0.6, mult: [1, 0.5, 1] },
+    { w: 860, h: 480, forces: true, graph: true, readout: true, speed: 8,
+      label: 'Three metronomes, the middle one at half tempo' });
+  addButton(d, 'Randomize phases', () => d.randomize());
+  speedSlider(d, { min: 1, max: 64, initial: 8 });
+  multiplierChips(d);
+}
+
+// Playground
+{
+  const d = new Demo('demo-playground',
+    { n: 3, M: 0.75 },
+    { w: 880, h: 500, forces: true, phaseInset: true, graph: true, readout: true, speed: 3,
+      label: 'Playground: up to seven metronomes with adjustable tempos, base weight and friction' });
+
+  let rebuildChips;
+  addButton(d, 'Randomize phases', () => d.randomize());
+  addButton(d, 'All same tempo', () => {
+    d.sim.mult.fill(1);
+    d.sim.updateFrequencies();
+    rebuildChips();
+  });
+  addSlider(d, {
+    label: 'metronomes', min: 1, max: 7, value: 3,
+    fmt: v => v.toFixed(0),
+    oninput: v => {
+      const old = d.sim;
+      d.sim = new Sim({ n: v, bpm: old.bpm, M: old.M, c: old.c });
+      for (let i = 0; i < Math.min(v, old.n); i++) d.sim.mult[i] = old.mult[i];
+      d.sim.updateFrequencies();
+      d.resetHistory();
+      d.peaks.fill(0);
+      rebuildChips();
+    },
+  });
+  addSlider(d, {
+    label: 'tempo (all)', min: 60, max: 208, value: 144,
+    fmt: v => v.toFixed(0) + ' BPM',
+    oninput: v => { d.sim.bpm = v; d.sim.updateFrequencies(); },
+  });
+  speedSlider(d, { min: 0.1, max: 100, initial: 3 });
+  baseWeightSlider(d, 35);
+  addSlider(d, {
+    label: 'roller friction', value: 20,
+    fmt: v => (0.02 + (v / 100) * 2).toFixed(2),
+    oninput: v => { d.sim.c = 0.02 + (v / 100) * 2; },
+  });
+  rebuildChips = multiplierChips(d);
+}
+
+// Millennium Bridge
+{
+  const d = new BridgeDemo('demo-bridge',
+    { w: 860, h: 360, graph: true, readout: true, speed: 8,
+      label: 'The Millennium Bridge: walkers synchronizing with the deck sway past a crowd-size threshold' });
+  d.graphTicks = [['0', 0], ['5', 0.5], ['10', 1]];
+  d.graphCaption = span => `peak sway in centimeters, over ${formatTime(span)} of simulated time`;
+  addButton(d, 'Restart', () => d.restart());
+  addSlider(d, {
+    label: 'crowd size', min: 20, max: 220, value: 160,
+    fmt: v => v.toFixed(0) + ' walkers',
+    oninput: v => { d.N = v; d.restart(); },
+  });
+  speedSlider(d, { min: 1, max: 32, initial: 8 });
+}
+
+// Fireflies
+{
+  const d = new FireflyDemo('demo-fireflies',
+    { w: 720, h: 390, graph: true, readout: true, speed: 2,
+      label: 'Fireflies flashing, gradually gathering into a common beat' });
+  addButton(d, 'Restart', () => d.restart());
+  addSlider(d, {
+    label: 'coupling', min: 0, max: 100, value: 20,
+    fmt: v => v === 0 ? 'off' : v.toFixed(0) + '%',
+    oninput: v => { d.eps = (v / 100) * 0.008; },
+  });
+  speedSlider(d, { min: 1, max: 8, initial: 2 });
+}
+
+// Applause
+{
+  const d = new ApplauseDemo('demo-applause',
+    { w: 720, h: 350, graph: true, readout: true, speed: 1,
+      label: 'An audience clapping, finding a common rhythm at slower tempos' });
+  addButton(d, 'Restart', () => d.restart());
+  addSlider(d, {
+    label: 'clapping tempo', min: 15, max: 40, value: 32,
+    fmt: v => (v / 10).toFixed(1) + ' claps/s',
+    oninput: v => d.setTempo(v / 10),
+  });
+  speedSlider(d, { min: 1, max: 8, initial: 1 });
+}
+
+// Kuramoto
+{
+  const d = new KuramotoDemo('demo-kuramoto',
+    { w: 620, h: 420, graph: true, readout: true, speed: 2,
+      label: 'The Kuramoto model: phase oscillators on a circle condensing past a critical coupling' });
+  addButton(d, 'Restart', () => d.restart());
+  addSlider(d, {
+    label: 'coupling', min: 0, max: 200, value: 40,
+    fmt: v => (v / 100).toFixed(2),
+    oninput: v => { d.K = v / 100; },
+  });
+  addSlider(d, {
+    label: 'tempo spread', min: 5, max: 120, value: 50,
+    fmt: v => (v / 100).toFixed(2),
+    oninput: v => d.setSpread(v / 100),
+  });
+  speedSlider(d, { min: 1, max: 8, initial: 2 });
+}
+
+/* ============================== Main loop ============================== */
+
+const observer = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    const d = demos.find(d => d.box === e.target);
+    if (!d) continue;
+    d.visible = e.isIntersecting;
+    if (d.visible && d.opts.autoplay && !d._autoplayed) {
+      d._autoplayed = true;
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) d.start();
+    }
+  }
+}, { rootMargin: '120px' });
+for (const d of demos) observer.observe(d.box);
+
+const soundBtn = document.getElementById('soundToggle');
+soundBtn.addEventListener('click', () => {
+  soundOn = !soundOn;
+  soundBtn.textContent = soundOn ? '🔊' : '🔇';
+  soundBtn.setAttribute('aria-pressed', String(soundOn));
+  if (soundOn && !audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+});
+
+let lastFrame = performance.now();
+function frame(now) {
+  const realDt = Math.min(0.05, (now - lastFrame) / 1000);
+  lastFrame = now;
+  clicksThisFrame = 0;
+  for (const d of demos) {
+    if (!d.visible) continue;
+    d.tick(realDt);
+    d.draw();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
